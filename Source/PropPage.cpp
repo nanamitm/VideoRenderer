@@ -23,6 +23,45 @@
 #include "Helper.h"
 #include "DisplayConfig.h"
 #include "PropPage.h"
+#include <Darkmodelib.h>
+
+// fork: DPI of the window, for pixel values that the dialog manager does not scale
+static UINT GetWindowDpi(HWND hWnd)
+{
+	typedef UINT(WINAPI* tpGetDpiForWindow)(HWND hwnd);
+	static tpGetDpiForWindow pGetDpiForWindow = (tpGetDpiForWindow)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+	if (pGetDpiForWindow) {
+		if (UINT dpi = pGetDpiForWindow(hWnd)) {
+			return dpi;
+		}
+	}
+	HDC hdc = ::GetDC(hWnd);
+	const UINT dpi = GetDeviceCaps(hdc, LOGPIXELSY);
+	::ReleaseDC(hWnd, hdc);
+	return dpi;
+}
+
+// fork: dark mode with win32-darkmodelib
+static void ApplyDarkMode(HWND hWnd)
+{
+	dmlib::initDarkMode();
+	// The page is a WS_CHILD dialog inside the host's property frame,
+	// so dmlib's title bar options for top-level windows are not used.
+	dmlib::setWindowEraseBgSubclass(hWnd);
+	dmlib::setWindowCtlColorSubclass(hWnd);
+	dmlib::setChildCtrlsSubclassAndTheme(hWnd);
+	dmlib::setWindowNotifyCustomDrawSubclass(hWnd);
+}
+
+static bool HandleDarkModeSettingChange(HWND hWnd, LPARAM lParam)
+{
+	if (dmlib::handleSettingChange(lParam)) {
+		ApplyDarkMode(hWnd);
+		::RedrawWindow(hWnd, nullptr, nullptr, RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
+		return true;
+	}
+	return false;
+}
 
 void SetCursor(HWND hWnd, LPCWSTR lpCursorName)
 {
@@ -355,6 +394,9 @@ HRESULT CVRMainPPage::OnActivate()
 		L"'Flip' is more efficient, but 'Discard' may work\n"
 		"more correctly in some rare situations.");
 
+	ApplyDarkMode(m_hWnd); // fork
+	dmlib::setDarkTooltips(m_hHint, static_cast<UINT>(dmlib::ToolTipsType::tooltip));
+
 	m_bActivated = true;
 
 	return S_OK;
@@ -652,6 +694,11 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 			return (LRESULT)1;
 		}
 	}
+	else if (uMsg == WM_SETTINGCHANGE) { // fork: live dark mode switch
+		if (HandleDarkModeSettingChange(hwnd, lParam) && m_hHint) {
+			dmlib::setDarkTooltips(m_hHint, static_cast<UINT>(dmlib::ToolTipsType::tooltip));
+		}
+	}
 
 	// Let the parent class handle the message.
 	return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
@@ -689,7 +736,7 @@ HWND CVRMainPPage::CreateHintWindow(HWND parent, int timePop, int timeInit, int 
 	SendMessageW(hhint, TTM_SETDELAYTIME, TTDT_AUTOPOP, MAKELONG(timePop, 0));
 	SendMessageW(hhint, TTM_SETDELAYTIME, TTDT_INITIAL, MAKELONG(timeInit, 0));
 	SendMessageW(hhint, TTM_SETDELAYTIME, TTDT_RESHOW, MAKELONG(timeReshow, 0));
-	SendMessageW(hhint, TTM_SETMAXTIPWIDTH, 0, 470);
+	SendMessageW(hhint, TTM_SETMAXTIPWIDTH, 0, MulDiv(470, GetWindowDpi(parent), 96)); // fork: was 470 px, unscaled
 	return hhint;
 }
 
@@ -784,14 +831,14 @@ HRESULT CVRInfoPPage::OnActivate()
 
 	// init monospace font
 	LOGFONTW lf = {};
-	HDC hdc = GetWindowDC();
-	lf.lfHeight = -MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72);
-	ReleaseDC(hdc);
+	// fork: was LOGPIXELSY of the window DC, which is the system DPI, not the page's monitor DPI
+	lf.lfHeight = -MulDiv(9, GetWindowDpi(m_hWnd), 72);
 	lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
 	wcscpy_s(lf.lfFaceName, L"Consolas");
 	m_hMonoFont = CreateFontIndirectW(&lf);
 
 	GetDlgItem(IDC_EDIT1).SetFont(m_hMonoFont);
+	ApplyDarkMode(m_hWnd); // fork
 	ASSERT(m_pVideoRenderer);
 
 	if (!m_pVideoRenderer->GetActive()) {
@@ -842,4 +889,101 @@ HRESULT CVRInfoPPage::OnActivate()
 	OldControlProc = (WNDPROC)::SetWindowLongPtrW(::GetDlgItem(m_hWnd, IDC_EDIT1), GWLP_WNDPROC, (LONG_PTR)ControlProc);
 
 	return S_OK;
+}
+
+// fork: live dark mode switch
+INT_PTR CVRInfoPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	if (uMsg == WM_SETTINGCHANGE) {
+		HandleDarkModeSettingChange(hwnd, lParam);
+	}
+
+	return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
+}
+
+// CVRQualityPPage (fork)
+
+#define QUALITY_TIMER_ID 1
+
+CVRQualityPPage::CVRQualityPPage(LPUNKNOWN lpunk, HRESULT* phr) :
+	CBasePropertyPage(L"QualityProp", lpunk, IDD_QUALITYPROPPAGE, IDS_QUALITYPROPPAGE_TITLE)
+{
+	DLog(L"CVRQualityPPage()");
+}
+
+CVRQualityPPage::~CVRQualityPPage()
+{
+	DLog(L"~CVRQualityPPage()");
+}
+
+void CVRQualityPPage::UpdateValues()
+{
+	auto SetValue = [this](int nID, HRESULT hr, const std::wstring& str) {
+		SetDlgItemTextW(nID, S_OK == hr ? str.c_str() : L"-");
+	};
+	int val = 0;
+	HRESULT hr = m_pQualProp->get_FramesDrawn(&val);
+	SetValue(IDC_EDIT3, hr, std::to_wstring(val));
+	hr = m_pQualProp->get_FramesDroppedInRenderer(&val);
+	SetValue(IDC_EDIT4, hr, std::to_wstring(val));
+	hr = m_pQualProp->get_AvgFrameRate(&val); // in hundredths
+	SetValue(IDC_EDIT5, hr, std::format(L"{}.{:02}", val / 100, val % 100));
+	hr = m_pQualProp->get_Jitter(&val);
+	SetValue(IDC_EDIT6, hr, std::to_wstring(val));
+	hr = m_pQualProp->get_AvgSyncOffset(&val);
+	SetValue(IDC_EDIT7, hr, std::to_wstring(val));
+	hr = m_pQualProp->get_DevSyncOffset(&val);
+	SetValue(IDC_EDIT8, hr, std::to_wstring(val));
+}
+
+HRESULT CVRQualityPPage::OnConnect(IUnknown* pUnk)
+{
+	if (pUnk == nullptr) return E_POINTER;
+
+	m_pQualProp = pUnk;
+	if (!m_pQualProp) {
+		return E_NOINTERFACE;
+	}
+
+	return S_OK;
+}
+
+HRESULT CVRQualityPPage::OnDisconnect()
+{
+	if (m_pQualProp == nullptr) {
+		return E_UNEXPECTED;
+	}
+
+	m_pQualProp.Release();
+
+	return S_OK;
+}
+
+HRESULT CVRQualityPPage::OnActivate()
+{
+	// set m_hWnd for CWindow
+	m_hWnd = m_hwnd;
+
+	SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
+	UpdateValues();
+	SetTimer(QUALITY_TIMER_ID, 1000);
+
+	ApplyDarkMode(m_hWnd);
+
+	return S_OK;
+}
+
+INT_PTR CVRQualityPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	if (uMsg == WM_TIMER && wParam == QUALITY_TIMER_ID) {
+		if (m_pQualProp) {
+			UpdateValues();
+		}
+		return (LRESULT)1;
+	}
+	if (uMsg == WM_SETTINGCHANGE) {
+		HandleDarkModeSettingChange(hwnd, lParam);
+	}
+
+	return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
 }

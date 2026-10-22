@@ -152,14 +152,23 @@
 #define IDC_COMBO_SDRTM                 1067
 #define IDC_STATIC_DVTM                 1068
 #define IDC_COMBO_DVTM                  1069
+// fork: quality property page
+#define IDD_QUALITYPROPPAGE             106
+#define IDS_QUALITYPROPPAGE_TITLE       107
+#define IDC_EDIT3                       1070
+#define IDC_EDIT4                       1071
+#define IDC_EDIT5                       1072
+#define IDC_EDIT6                       1073
+#define IDC_EDIT7                       1074
+#define IDC_EDIT8                       1075
 
 // Next default values for new objects
-// 
+//
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        106
+#define _APS_NEXT_RESOURCE_VALUE        108
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1070
+#define _APS_NEXT_CONTROL_VALUE         1076
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

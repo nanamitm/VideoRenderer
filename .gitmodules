@@ -4,3 +4,6 @@
 [submodule "external/minhook"]
 	path = external/minhook
 	url = https://github.com/TsudaKageyu/minhook.git
+[submodule "external/darkmodelib"]
+	path = external/darkmodelib
+	url = https://github.com/ozone10/win32-darkmodelib.git
