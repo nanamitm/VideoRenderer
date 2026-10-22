@@ -26,6 +26,18 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      # A tag checkout is a detached HEAD, so update_revision.cmd would write
+      # REV_BRANCH LOCAL into the version string and the zip name. Put the tag
+      # on a branch: master when the tag is on master (build_mpcvr.cmd then
+      # leaves the branch out of the name), otherwise release-<tag> (not the tag
+      # name itself, which would make the branch name ambiguous).
+      - name: Check out the tag on a branch
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git merge-base --is-ancestor HEAD origin/master
+          if ($LASTEXITCODE -eq 0) { git checkout -B master } else { git checkout -B "release-${{ github.ref_name }}" }
+        shell: pwsh
+
       - name: Build VideoRenderer
         run: |
           .\\build_mpcvr.cmd NoWait
