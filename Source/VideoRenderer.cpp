@@ -1265,7 +1265,8 @@ STDMETHODIMP CMpcVideoRenderer::GetPages(CAUUID* pPages)
 {
 	CheckPointer(pPages, E_POINTER);
 
-	static const GUID guidQualityPPage = { 0x565DCEF2, 0xAFC5, 0x11D2, 0x88, 0x53, 0x00, 0x00, 0xF8, 0x08, 0x83, 0xE3 };
+	// fork: own quality page instead of the Windows one {565DCEF2-AFC5-11D2-8853-0000F80883E3}, for dark mode
+	static const GUID guidQualityPPage = __uuidof(CVRQualityPPage);
 
 	pPages->cElems = GetActive() ? 3 : 1;
 	pPages->pElems = static_cast<GUID*>(CoTaskMemAlloc(sizeof(GUID) * pPages->cElems));

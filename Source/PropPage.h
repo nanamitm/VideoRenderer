@@ -78,4 +78,25 @@ private:
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;
+	INT_PTR OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) override; // fork
+};
+
+// CVRQualityPPage (fork: replaces the Windows quality page, which does not follow dark mode)
+
+class __declspec(uuid("14806ACB-F417-4FAA-BF93-6EB917A4B387"))
+	CVRQualityPPage : public CBasePropertyPage, public CWindow
+{
+	CComQIPtr<IQualProp, &IID_IQualProp> m_pQualProp;
+
+public:
+	CVRQualityPPage(LPUNKNOWN lpunk, HRESULT* phr);
+	~CVRQualityPPage();
+
+private:
+	void UpdateValues();
+
+	HRESULT OnConnect(IUnknown* pUnknown) override;
+	HRESULT OnDisconnect() override;
+	HRESULT OnActivate() override;
+	INT_PTR OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 };
