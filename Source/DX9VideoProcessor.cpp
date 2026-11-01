@@ -52,13 +52,11 @@ static const ScalingShaderResId s_Downscaling9ResIDs[DOWNSCALE_COUNT] = {
 
 const UINT dither_size = 32;
 
-#pragma pack(push, 1)
 template<unsigned texcoords>
 struct MYD3DVERTEX {
 	DirectX::XMFLOAT4 Pos;
 	DirectX::XMFLOAT2 Tex[texcoords];
 };
-#pragma pack(pop)
 
 template<unsigned texcoords>
 static HRESULT TextureBlt(IDirect3DDevice9* pD3DDev, MYD3DVERTEX<texcoords> v[4], D3DTEXTUREFILTERTYPE filter)
@@ -682,7 +680,7 @@ HRESULT CDX9VideoProcessor::Init(const HWND hwnd, const bool displayHdrChanged, 
 	return m_hrThread;
 }
 
-bool CDX9VideoProcessor::Initialized()
+bool CDX9VideoProcessor::Initialized() const
 {
 	return (m_pD3DDevEx.p != nullptr);
 }
@@ -1155,7 +1153,7 @@ BOOL CDX9VideoProcessor::InitMediaType(const CMediaType* pmt)
 	case CF_UYVY:
 		m_srcPitch = ALIGN(m_srcPitch, 4);
 		break;
-	case CF_V210:
+	case CF_v210:
 		m_srcPitch = ALIGN((biWidth + 5) / 6 * 16, 128);
 		break;
 	case CF_r210:
